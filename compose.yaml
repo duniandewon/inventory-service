@@ -1,0 +1,120 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: textile_postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - textile_network
+
+  pgadmin:
+    image: dpage/pgadmin4:9
+    container_name: textile_pgadmin
+    restart: unless-stopped
+
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+
+    ports:
+      - "5050:80"
+
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    networks:
+      - textile_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: textile_redis
+    restart: unless-stopped
+
+    command: redis-server --appendonly yes
+
+    volumes:
+      - redis_data:/data
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - textile_network
+
+  redisinsight:
+    image: redis/redisinsight:2.70
+    container_name: textile_redisinsight
+    restart: unless-stopped
+
+    ports:
+      - "8001:5540"
+
+    volumes:
+      - redisinsight_data:/data
+
+    depends_on:
+      redis:
+        condition: service_healthy
+
+    networks:
+      - textile_network
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: textile_api
+    restart: unless-stopped
+
+    ports:
+      - "${PORT}:${PORT}"
+
+    environment:
+      PORT: ${PORT}
+
+      DATABASE_URL: postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}?sslmode=disable
+
+      REDIS_URL: redis://redis:6379
+
+      JWT_SECRET: ${JWT_SECRET}
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+      redis:
+        condition: service_healthy
+
+    networks:
+      - textile_network
+
+networks:
+  textile_network:
+
+volumes:
+  postgres_data:
+  redis_data:
+  pgadmin_data:
+  redisinsight_data:

@@ -1,0 +1,34 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary and coverage reports
+*.test
+*.out
+coverage.txt
+
+# Go workspaces
+go.work
+go.work.sum
+
+# Environment variables and secrets
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
+
+# Docker configurations
+.dockerignore
+# Ignore local Docker development overrides if necessary
+docker-compose.override.yml
+
+# IDEs and OS files
+.idea/
+.vscode/
+*.sw?
+.DS_Store
+Thumbs.db
