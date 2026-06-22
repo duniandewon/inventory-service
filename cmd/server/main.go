@@ -12,10 +12,12 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/duniandewon/inventory-service/internal/auth"
 	"github.com/duniandewon/inventory-service/internal/config"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	_ "github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 )
 
 func main() {
@@ -29,6 +31,19 @@ func main() {
 
 	log.Println("Database connection established successfully.")
 
+	redisClient, err := initRedis(env.RedisUrl)
+	if err != nil {
+		log.Fatalf("Failed to initialize redis: %v", err)
+	}
+	defer redisClient.Close()
+
+	log.Println("Redis connection established successfully.")
+
+	authRepo := auth.NewRepository(db)
+	authStore := auth.NewRedisStore(redisClient)
+	authService := auth.NewService(authRepo, authStore, authStore, auth.NewLoggingOTPSender(), env)
+	authHandler := auth.NewHandler(authService)
+
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -41,6 +56,8 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status": "ok"}`))
 	})
+
+	auth.RegisterRoutes(r, authService, authHandler)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%s", env.Port),
@@ -90,4 +107,22 @@ func initDB(dataSourceName string) (*sql.DB, error) {
 	}
 
 	return db, nil
+}
+
+func initRedis(redisURL string) (*redis.Client, error) {
+	opts, err := redis.ParseURL(redisURL)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing redis url: %w", err)
+	}
+
+	client := redis.NewClient(opts)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := client.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("error pinging redis: %w", err)
+	}
+
+	return client, nil
 }
