@@ -28,34 +28,47 @@ The MVP is optimized for a **single-user operational flow**, but the system is b
 
 To get this off the ground quickly, the MVP is sticked to the critical path of data flow.
 
-**1. Authentication**
+**1. Authentication (`auth` domain)**
+
+_Scope: proving **who** a request belongs to. This domain owns no user records itself; it only verifies identity and issues sessions._
 
 - A simple passwordless login screen using WhatsApp OTP (a 6-digit code sent directly to the user's WhatsApp number) or SSO.
-- Session management via JWT (JSON Web Tokens) or secure cookies in your Go backend.
+- OTP generation/validation plus session management via JWT (JSON Web Tokens) or secure cookies in your Go backend.
+- An authentication middleware (`RequireAuth`) that every protected route passes through.
+- _On successful login, `auth` calls into the `users` domain to resolve the account; it never writes user rows directly._
 
-**2. Master Data Management**
+**2. User & Role Management (`users` domain)**
+
+_Scope: **who exists** and **what they are allowed to do**. This domain owns the `users`, `roles`, and `user_roles` tables._
+
+- Ensure a `users` row exists on first successful login, and manage the role catalogue (RBAC metadata).
+- Assign and revoke roles for a user.
+- Full user CRUD (invite, edit, deactivate) is **post-MVP** given the single-user flow, but the domain and data model exist now so it can be switched on without a migration.
+- _Not to be confused with `partner_roles` (vendor/cutter/tailor/client), which lives in the `partners` domain and is unrelated to user roles._
+
+**3. Master Data Management**
 
 - **Products:** Add/Edit blueprints (e.g., "Navy Cotton Roll", "Cut T-Shirt Panel", "Finished T-Shirt").
 - **Partners:** Add/Edit vendors, cutters, tailors, and clients.
 - **Processes & UOM:** Manage the units of measure and the types of processes (Cutting, Sewing).
 
-**3. Inbound Logistics (Receiving)**
+**4. Inbound Logistics (Receiving)**
 
 - A feature to "Receive Goods."
 - _Backend Action:_ Creates a new row in the `inventory` table with status `AVAILABLE` (e.g., logging a 100-yard roll from a supplier).
 
-**4. The Workflow Engine (The Core Loop)**
+**5. The Workflow Engine (The Core Loop)**
 
 - **Create Work Order:** Select a Process (e.g., Cutting), select a Partner (e.g., Cutter Vendor A).
 - **Assign Inputs:** Select active inventory (e.g., Fabric Roll #101) to "send" to the vendor. This marks the input inventory as `CONSUMED` or `IN_PROGRESS`.
 - **Receive Outputs:** When the vendor is done, log the resulting items (e.g., 200 Cut Pieces). This creates _new_ rows in the `inventory` table linked to that specific Work Order.
 
-**5. Outbound Logistics (Shipping)**
+**6. Outbound Logistics (Shipping)**
 
 - **Create Delivery Note:** Select a customer (Partner), select finished goods from `inventory`, and generate a delivery note number.
 - _Backend Action:_ Changes the inventory status of those items to `SHIPPED`.
 
-**6. The "Where is my stuff?" Dashboard**
+**7. The "Where is my stuff?" Dashboard**
 
 - A real-time summary view.
 - **Current Stock:** Querying the `inventory` table for anything marked `AVAILABLE`.
@@ -85,10 +98,15 @@ To get this off the ground quickly, the MVP is sticked to the critical path of d
 │   └── server/
 │       └── main.go              # The entry point: loads config, connects DB, starts HTTP server
 ├── internal/
-│   ├── auth/                    # Domain: Users, OTP, Sessions
-│   │   ├── handler.go           # HTTP routes (e.g., POST /login)
-│   │   ├── service.go           # Business logic (e.g., generate OTP, validate)
-│   │   └── repository.go             # Database queries for users and roles
+│   ├── auth/                    # Domain: Authentication only — OTP, Sessions, JWT
+│   │   ├── handler.go           # HTTP routes (e.g., POST /login, POST /verify-otp)
+│   │   ├── service.go           # Business logic (generate/validate OTP, issue session)
+│   │   ├── middleware.go        # RequireAuth: verifies session/JWT on protected routes
+│   │   └── repository.go        # Auth-only persistence (OTP / session records)
+│   ├── users/                   # Domain: User management + Roles (RBAC)
+│   │   ├── handler.go           # HTTP routes (user CRUD, role assignment)
+│   │   ├── service.go           # Business logic (ensure-user-on-login, assign role)
+│   │   └── repository.go        # Database queries for users, roles, user_roles
 │   ├── inventory/               # Domain: Products (blueprints) and Physical Stock
 │   │   ├── handler.go
 │   │   ├── service.go
