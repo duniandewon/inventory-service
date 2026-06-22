@@ -201,8 +201,6 @@ CREATE TABLE work_order_line_items(
     inventory_id INT REFERENCES inventory(id),
     quantity DECIMAL(12, 4) NOT NULL,
     direction io_direction NOT NULL
-    consumed, 'OUTPUT'
-    produced
 );
 
 --4. Outbound Logistics
