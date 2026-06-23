@@ -14,21 +14,29 @@ import (
 	"github.com/duniandewon/inventory-service/internal/config"
 )
 
+// LoginRecorder stamps last_login_at for a user after a successful OTP
+// verification. Implemented by the users feature, which owns the write.
+type LoginRecorder interface {
+	RecordLogin(ctx context.Context, userID int) error
+}
+
 type Service struct {
 	repo      *Repository
 	otps      OTPStore
 	tokens    TokenStore
 	sender    OTPSender
+	logins    LoginRecorder
 	jwtSecret string
 	env       *config.Env
 }
 
-func NewService(repo *Repository, otps OTPStore, tokens TokenStore, sender OTPSender, env *config.Env) *Service {
+func NewService(repo *Repository, otps OTPStore, tokens TokenStore, sender OTPSender, logins LoginRecorder, env *config.Env) *Service {
 	return &Service{
 		repo:      repo,
 		otps:      otps,
 		tokens:    tokens,
 		sender:    sender,
+		logins:    logins,
 		jwtSecret: env.JwtSecret,
 		env:       env,
 	}
@@ -139,6 +147,10 @@ func (s *Service) VerifyOTP(ctx context.Context, phone, code string) (*TokenPair
 
 	roles, err := s.repo.GetUserRoles(ctx, user.ID)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := s.logins.RecordLogin(ctx, user.ID); err != nil {
 		return nil, err
 	}
 

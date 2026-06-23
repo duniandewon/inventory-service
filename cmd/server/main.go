@@ -14,6 +14,7 @@ import (
 
 	"github.com/duniandewon/inventory-service/internal/auth"
 	"github.com/duniandewon/inventory-service/internal/config"
+	"github.com/duniandewon/inventory-service/internal/users"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	_ "github.com/lib/pq"
@@ -39,9 +40,13 @@ func main() {
 
 	log.Println("Redis connection established successfully.")
 
+	usersRepo := users.NewRepository(db)
+	usersService := users.NewService(usersRepo)
+	usersHandler := users.NewHandler(usersService)
+
 	authRepo := auth.NewRepository(db)
 	authStore := auth.NewRedisStore(redisClient)
-	authService := auth.NewService(authRepo, authStore, authStore, auth.NewLoggingOTPSender(), env)
+	authService := auth.NewService(authRepo, authStore, authStore, auth.NewLoggingOTPSender(), usersRepo, env)
 	authHandler := auth.NewHandler(authService)
 
 	r := chi.NewRouter()
@@ -58,6 +63,7 @@ func main() {
 	})
 
 	auth.RegisterRoutes(r, authService, authHandler)
+	users.RegisterRoutes(r, authService, usersHandler)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%s", env.Port),
