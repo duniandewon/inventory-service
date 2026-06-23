@@ -2,37 +2,19 @@
 
 <!-- Feature Name -->
 
-User & Role Management
-
 ## Status
 
 <!-- Not Started|In Progress|Completed -->
 
-Completed
+Not Started
 
 ## Goals
 
 <!-- Goals & requirements -->
 
-Based on `context/features/users.md`:
-
-- Own the `users`, `roles`, and `user_roles` tables — the single source of truth for account records and role-based access control (RBAC).
-- Account provisioning: seed the initial owner account by migration; accounts are never auto-created at login. Invite-based creation is post-MVP.
-- Login support for `auth`: `ResolveUserByPhone(ctx, phone) -> (User, []Role, error)` (read-only) and `RecordLogin(ctx, user_id) -> error` (single write to `last_login_at`).
-- Role catalogue management (`roles` table) and role assignment/revocation (`user_roles` join table).
-- MVP API surface (all behind `RequireAuth`): `GET /api/roles`, `GET /api/users/{id}/roles`, `POST /api/users/{id}/roles`, `DELETE /api/users/{id}/roles/{rid}`.
-- Seed a default `OWNER` role and attach it to the seeded owner account.
-- Out of scope: OTP/session/JWT mechanics, `RequireAuth`/`RequireRole` middleware, current-user endpoint, `partner_roles`, SSO config, per-action permissions — all owned by `auth` or other domains.
-
 ## Notes
 
 <!-- Any extra notes -->
-
-Open decisions to resolve during implementation (see `context/features/users.md` "Open Decisions"):
-
-- Default role seed naming/set (`OWNER` vs `ADMIN`, `OPERATOR` post-MVP).
-- Role deletion semantics — block deletion of in-use roles vs. soft-delete (note `user_roles.role_id` is `ON DELETE CASCADE`).
-- Whether users may edit their own profile or it's admin-only.
 
 ## History
 
