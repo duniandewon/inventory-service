@@ -48,9 +48,12 @@ _Scope: **who exists** and **what they are allowed to do**. This domain owns the
 
 **3. Master Data Management**
 
-- **Products:** Add/Edit blueprints (e.g., "Navy Cotton Roll", "Cut T-Shirt Panel", "Finished T-Shirt").
-- **Partners:** Add/Edit vendors, cutters, tailors, and clients.
-- **Processes & UOM:** Manage the units of measure and the types of processes (Cutting, Sewing).
+_This is a **UI grouping** — a set of screens where the owner edits lookup data — **not** a single domain. Each table is owned by the domain that uses it, so the code routes each one to its own package even though the app presents them together:_
+
+- **Products** (`inventory` domain): Add/Edit blueprints (e.g., "Navy Cotton Roll", "Cut T-Shirt Panel", "Finished T-Shirt"). Lives beside physical stock because `inventory.product_id → products`.
+- **Partners** (`partners` domain): Add/Edit vendors, cutters, tailors, and clients, together with their `partner_roles` classification.
+- **Process Types** (`logistics` domain): Manage the types of processes (Cutting, Sewing) — the vocabulary of the workflow engine, referenced by `work_orders.process_type_id`.
+- **Units of Measure** (`reference` — shared): Manage units (yards, pieces, meters). Referenced by `products`, `inventory`, and `work_order_line_items`, so it is owned by no single domain and lives in a small shared package instead.
 
 **4. Inbound Logistics (Receiving)**
 
@@ -111,11 +114,15 @@ _Scope: **who exists** and **what they are allowed to do**. This domain owns the
 │   │   ├── handler.go
 │   │   ├── service.go
 │   │   └── repository.go
-│   ├── logistics/               # Domain: The Workflow Engine (Work Orders & Delivery)
+│   ├── logistics/               # Domain: Workflow Engine (Work Orders & Delivery) + Process Types
 │   │   ├── handler.go
 │   │   ├── service.go           # Logic: deducts input inventory, adds output inventory
 │   │   └── store.go             # Complex SQL transactions live here
-│   ├── partners/                # Domain: Vendors, Cutters, Tailors, Customers
+│   ├── partners/                # Domain: Vendors, Cutters, Tailors, Customers (+ partner_roles)
+│   │   ├── handler.go
+│   │   ├── service.go
+│   │   └── repository.go
+│   ├── reference/               # Shared lookups owned by no single domain (units_of_measure)
 │   │   ├── handler.go
 │   │   ├── service.go
 │   │   └── repository.go
@@ -160,7 +167,7 @@ CREATE TABLE user_roles(
 );
 
 --2. Master Data Tables
-CREATE TABLE units_of_measure(
+CREATE TABLE units_of_measure( 
     id SERIAL PRIMARY KEY,
     name VARCHAR(50) NOT NULL UNIQUE
 );
@@ -218,6 +225,7 @@ CREATE TABLE work_order_line_items(
     work_order_id INT REFERENCES work_orders(id) ON DELETE CASCADE,
     inventory_id INT REFERENCES inventory(id),
     quantity DECIMAL(12, 4) NOT NULL,
+    uom_id INT NOT NULL REFERENCES units_of_measure(id), -- unit this line is recorded in; input/output differ (e.g. yards in, pieces out)
     direction io_direction NOT NULL
 );
 
