@@ -14,6 +14,8 @@ import (
 
 	"github.com/duniandewon/inventory-service/internal/auth"
 	"github.com/duniandewon/inventory-service/internal/config"
+	"github.com/duniandewon/inventory-service/internal/inventory"
+	"github.com/duniandewon/inventory-service/internal/logistics"
 	"github.com/duniandewon/inventory-service/internal/reference"
 	"github.com/duniandewon/inventory-service/internal/users"
 	"github.com/go-chi/chi/v5"
@@ -54,6 +56,11 @@ func main() {
 	authService := auth.NewService(authRepo, authStore, authStore, auth.NewLoggingOTPSender(), usersRepo, env)
 	authHandler := auth.NewHandler(authService)
 
+	invRepo := inventory.NewRepository(db)
+	logisticsRepo := logistics.NewRepository(db, invRepo)
+	logisticsService := logistics.NewService(logisticsRepo)
+	logisticsHandler := logistics.NewHandler(logisticsService)
+
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -70,6 +77,7 @@ func main() {
 	auth.RegisterRoutes(r, authService, authHandler)
 	users.RegisterRoutes(r, authService, usersHandler)
 	reference.RegisterRoutes(r, authService, referenceHandler)
+	logistics.RegisterRoutes(r, authService, logisticsHandler)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%s", env.Port),
