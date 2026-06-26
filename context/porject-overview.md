@@ -117,7 +117,7 @@ _This is a **UI grouping** — a set of screens where the owner edits lookup dat
 │   ├── logistics/               # Domain: Workflow Engine (Work Orders & Delivery) + Process Types
 │   │   ├── handler.go
 │   │   ├── service.go           # Logic: deducts input inventory, adds output inventory
-│   │   └── store.go             # Complex SQL transactions live here
+│   │   └── repository.go        # Queries + the cross-domain inventory transactions
 │   ├── partners/                # Domain: Vendors, Cutters, Tailors, Customers (+ partner_roles)
 │   │   ├── handler.go
 │   │   ├── service.go
@@ -167,7 +167,7 @@ CREATE TABLE user_roles(
 );
 
 --2. Master Data Tables
-CREATE TABLE units_of_measure( 
+CREATE TABLE units_of_measure( -- shared reference primitive: used by inventory AND logistics
     id SERIAL PRIMARY KEY,
     name VARCHAR(50) NOT NULL UNIQUE
 );
