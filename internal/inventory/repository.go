@@ -24,19 +24,49 @@ const reserveInventoryQuery = `
 	WHERE id = ANY($1) AND status = 'AVAILABLE'
 `
 
+// ReserveForWorkOrder transitions the given inventory rows from AVAILABLE to
+// IN_PROGRESS. invIDs must be non-empty, or ErrNoInventoryIDs is returned;
+// duplicate IDs are collapsed internally before the transition is verified.
 func (r *Repository) ReserveForWorkOrder(ctx context.Context, tx DBTX, invIDs []int) error {
-	result, err := tx.ExecContext(ctx, reserveInventoryQuery, pq.Array(invIDs))
+	return r.execStatusTransition(ctx, tx, "reserving", reserveInventoryQuery, invIDs)
+}
+
+// execStatusTransition runs a status-transition UPDATE for the given query
+// against the de-duplicated invIDs, and verifies that every unique ID
+// transitioned. invIDs must be non-empty, or ErrNoInventoryIDs is returned
+// before any query is issued.
+func (r *Repository) execStatusTransition(ctx context.Context, tx DBTX, op, query string, invIDs []int) error {
+	if len(invIDs) == 0 {
+		return ErrNoInventoryIDs
+	}
+	ids := uniqueInts(invIDs)
+	result, err := tx.ExecContext(ctx, query, pq.Array(ids))
 	if err != nil {
-		return fmt.Errorf("reserving inventory: %w", err)
+		return fmt.Errorf("%s inventory: %w", op, err)
 	}
 	n, err := result.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("checking reserve result: %w", err)
+		return fmt.Errorf("checking %s result: %w", op, err)
 	}
-	if int(n) != len(invIDs) {
+	if int(n) != len(ids) {
 		return ErrInvalidStatusTransition
 	}
 	return nil
+}
+
+// uniqueInts returns in with duplicate values collapsed, preserving the
+// order of first occurrence.
+func uniqueInts(in []int) []int {
+	seen := make(map[int]struct{}, len(in))
+	out := make([]int, 0, len(in))
+	for _, v := range in {
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
 }
 
 const insertInventoryQuery = `
@@ -66,19 +96,11 @@ const consumeInventoryQuery = `
 	WHERE id = ANY($1) AND status = 'IN_PROGRESS'
 `
 
+// ConsumeForWorkOrder transitions the given inventory rows from IN_PROGRESS
+// to CONSUMED. invIDs must be non-empty, or ErrNoInventoryIDs is returned;
+// duplicate IDs are collapsed internally before the transition is verified.
 func (r *Repository) ConsumeForWorkOrder(ctx context.Context, tx DBTX, invIDs []int) error {
-	result, err := tx.ExecContext(ctx, consumeInventoryQuery, pq.Array(invIDs))
-	if err != nil {
-		return fmt.Errorf("consuming inventory: %w", err)
-	}
-	n, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("checking consume result: %w", err)
-	}
-	if int(n) != len(invIDs) {
-		return ErrInvalidStatusTransition
-	}
-	return nil
+	return r.execStatusTransition(ctx, tx, "consuming", consumeInventoryQuery, invIDs)
 }
 
 const markShippedQuery = `
@@ -86,17 +108,9 @@ const markShippedQuery = `
 	WHERE id = ANY($1) AND status = 'AVAILABLE'
 `
 
+// MarkShipped transitions the given inventory rows from AVAILABLE to
+// SHIPPED. invIDs must be non-empty, or ErrNoInventoryIDs is returned;
+// duplicate IDs are collapsed internally before the transition is verified.
 func (r *Repository) MarkShipped(ctx context.Context, tx DBTX, invIDs []int) error {
-	result, err := tx.ExecContext(ctx, markShippedQuery, pq.Array(invIDs))
-	if err != nil {
-		return fmt.Errorf("marking inventory shipped: %w", err)
-	}
-	n, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("checking ship result: %w", err)
-	}
-	if int(n) != len(invIDs) {
-		return ErrInvalidStatusTransition
-	}
-	return nil
+	return r.execStatusTransition(ctx, tx, "marking shipped", markShippedQuery, invIDs)
 }
